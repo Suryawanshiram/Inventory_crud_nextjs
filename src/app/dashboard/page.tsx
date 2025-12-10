@@ -4,80 +4,116 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { TrendingUp } from "lucide-react";
 
+type ProductData = {
+  price: number;
+  quantity: number;
+  createdAt: Date;
+  name: string;
+  lowStockAt: number | null;
+};
+
+type RawProduct = {
+  price: any; // Decimal from Prisma
+  quantity: number;
+  createdAt: Date;
+  name: string;
+  lowStockAt: number | null;
+};
+
 export default async function DashboardPage() {
   const user = await getCurrentUser();
-  const userId = user.id;
+  const userId = user?.id;
 
-  const [totalProducts, lowStock, allProducts] = await Promise.all([
+  const [totalProducts, lowStock, rawProducts, recentRaw] = await Promise.all([
     prisma.product.count({ where: { userId } }),
     prisma.product.count({
-      where: {
-        userId,
-        lowStockAt: { not: null },
-        quantity: { lte: 5 },
+      where: { userId, lowStockAt: { not: null }, quantity: { lte: 5 } },
+    }),
+    prisma.product.findMany({
+      where: { userId },
+      select: {
+        price: true,
+        quantity: true,
+        createdAt: true,
+        name: true,
+        lowStockAt: true,
       },
     }),
     prisma.product.findMany({
       where: { userId },
-      select: { price: true, quantity: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: {
+        price: true,
+        quantity: true,
+        createdAt: true,
+        name: true,
+        lowStockAt: true,
+      },
     }),
   ]);
 
-  const totalValue = allProducts.reduce(
-    (sum, product) => sum + Number(product.price) * Number(product.quantity),
+  // Convert Decimal to number
+  const allProducts: ProductData[] = rawProducts.map((p: RawProduct) => ({
+    ...p,
+    price: Number(p.price),
+  }));
+  const recent: ProductData[] = recentRaw.map((p: RawProduct) => ({
+    ...p,
+    price: Number(p.price),
+  }));
+
+  // Total value
+  const totalValue: number = allProducts.reduce(
+    (sum: number, product: ProductData) =>
+      sum + product.price * product.quantity,
     0
   );
 
-  const inStockCount = allProducts.filter((p) => Number(p.quantity) > 5).length;
-  const lowStockCount = allProducts.filter(
-    (p) => Number(p.quantity) <= 5 && Number(p.quantity) >= 1
+  // Stock counts
+  const inStockCount: number = allProducts.filter(
+    (p: ProductData) => p.quantity > 5
   ).length;
-  const outOfStockCount = allProducts.filter(
-    (p) => Number(p.quantity) === 0
+  const lowStockCount: number = allProducts.filter(
+    (p: ProductData) => p.quantity <= 5 && p.quantity >= 1
+  ).length;
+  const outOfStockCount: number = allProducts.filter(
+    (p: ProductData) => p.quantity === 0
   ).length;
 
-  const inStockPercentage =
-    totalProducts > 0 ? Math.round((inStockCount / totalProducts) * 100) : 0;
-  const lowStockPercentage =
-    totalProducts > 0 ? Math.round((lowStockCount / totalProducts) * 100) : 0;
-  const outOfStockPercentage =
-    totalProducts > 0 ? Math.round((outOfStockCount / totalProducts) * 100) : 0;
+  // Percentages
+  const inStockPercentage: number = totalProducts
+    ? Math.round((inStockCount / totalProducts) * 100)
+    : 0;
+  const lowStockPercentage: number = totalProducts
+    ? Math.round((lowStockCount / totalProducts) * 100)
+    : 0;
+  const outOfStockPercentage: number = totalProducts
+    ? Math.round((outOfStockCount / totalProducts) * 100)
+    : 0;
 
+  // Weekly products data
   const now = new Date();
-  const weeklyProductsData = [];
-
-  for (let i = 11; i >= 0; i--) {
+  const weeklyProductsData = Array.from({ length: 12 }, (_, i) => {
     const weekStart = new Date(now);
-    weekStart.setDate(weekStart.getDate() - i * 7);
+    weekStart.setDate(weekStart.getDate() - (11 - i) * 7);
     weekStart.setHours(0, 0, 0, 0);
 
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
-    weekStart.setHours(23, 59, 59, 999);
+    weekEnd.setHours(23, 59, 59, 999);
 
     const weekLabel = `${String(weekStart.getMonth() + 1).padStart(
       2,
       "0"
-    )}/${String(weekStart.getDate() + 1).padStart(2, "0")}`;
+    )}/${String(weekStart.getDate()).padStart(2, "0")}`;
 
-    const weekProducts = allProducts.filter((product) => {
-      const productDate = new Date(product.createdAt);
-      return productDate >= weekStart && productDate <= weekEnd;
-    });
+    const weekProductsCount: number = allProducts.filter(
+      (p: ProductData) => p.createdAt >= weekStart && p.createdAt <= weekEnd
+    ).length;
 
-    weeklyProductsData.push({
-      week: weekLabel,
-      products: weekProducts.length,
-    });
-  }
-
-  const recent = await prisma.product.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    take: 5,
+    return { week: weekLabel, products: weekProductsCount };
   });
-
-  // console.log(totalValue);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -143,7 +179,7 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {/* Iventory over time */}
+          {/* Inventory over time */}
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-6">
               <h2>New products per week</h2>
