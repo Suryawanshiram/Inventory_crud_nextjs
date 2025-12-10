@@ -3,7 +3,6 @@ import Sidebar from "@/components/sidebar";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { TrendingUp } from "lucide-react";
-
 type ProductData = {
   price: number;
   quantity: number;
@@ -22,7 +21,8 @@ type RawProduct = {
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
-  const userId = user?.id;
+  if (!user) throw new Error("User not authenticated");
+  const userId = user.id;
 
   const [totalProducts, lowStock, rawProducts, recentRaw] = await Promise.all([
     prisma.product.count({ where: { userId } }),
@@ -58,6 +58,7 @@ export default async function DashboardPage() {
     ...p,
     price: Number(p.price),
   }));
+
   const recent: ProductData[] = recentRaw.map((p: RawProduct) => ({
     ...p,
     price: Number(p.price),
@@ -71,14 +72,12 @@ export default async function DashboardPage() {
   );
 
   // Stock counts
-  const inStockCount: number = allProducts.filter(
-    (p: ProductData) => p.quantity > 5
-  ).length;
+  const inStockCount: number = allProducts.filter((p) => p.quantity > 5).length;
   const lowStockCount: number = allProducts.filter(
-    (p: ProductData) => p.quantity <= 5 && p.quantity >= 1
+    (p) => p.quantity > 0 && p.quantity <= 5
   ).length;
   const outOfStockCount: number = allProducts.filter(
-    (p: ProductData) => p.quantity === 0
+    (p) => p.quantity === 0
   ).length;
 
   // Percentages
@@ -94,26 +93,29 @@ export default async function DashboardPage() {
 
   // Weekly products data
   const now = new Date();
-  const weeklyProductsData = Array.from({ length: 12 }, (_, i) => {
-    const weekStart = new Date(now);
-    weekStart.setDate(weekStart.getDate() - (11 - i) * 7);
-    weekStart.setHours(0, 0, 0, 0);
+  const weeklyProductsData: { week: string; products: number }[] = Array.from(
+    { length: 12 },
+    (_, i) => {
+      const weekStart = new Date(now);
+      weekStart.setDate(weekStart.getDate() - (11 - i) * 7);
+      weekStart.setHours(0, 0, 0, 0);
 
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 6);
-    weekEnd.setHours(23, 59, 59, 999);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
 
-    const weekLabel = `${String(weekStart.getMonth() + 1).padStart(
-      2,
-      "0"
-    )}/${String(weekStart.getDate()).padStart(2, "0")}`;
+      const weekLabel = `${String(weekStart.getMonth() + 1).padStart(
+        2,
+        "0"
+      )}/${String(weekStart.getDate()).padStart(2, "0")}`;
 
-    const weekProductsCount: number = allProducts.filter(
-      (p: ProductData) => p.createdAt >= weekStart && p.createdAt <= weekEnd
-    ).length;
+      const weekProductsCount: number = allProducts.filter(
+        (p: ProductData) => p.createdAt >= weekStart && p.createdAt <= weekEnd
+      ).length;
 
-    return { week: weekLabel, products: weekProductsCount };
-  });
+      return { week: weekLabel, products: weekProductsCount };
+    }
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
