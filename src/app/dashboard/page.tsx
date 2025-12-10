@@ -16,13 +16,25 @@ export default async function DashboardPage() {
   const user = await getCurrentUser();
   const userId = user?.id;
 
-  const [totalProducts, lowStock, rawProducts] = await Promise.all([
+  const [totalProducts, lowStock, rawProducts, recentRaw] = await Promise.all([
     prisma.product.count({ where: { userId } }),
     prisma.product.count({
       where: { userId, lowStockAt: { not: null }, quantity: { lte: 5 } },
     }),
     prisma.product.findMany({
       where: { userId },
+      select: {
+        price: true,
+        quantity: true,
+        createdAt: true,
+        name: true,
+        lowStockAt: true,
+      },
+    }),
+    prisma.product.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: 5,
       select: {
         price: true,
         quantity: true,
@@ -38,18 +50,25 @@ export default async function DashboardPage() {
     ...p,
     price: Number(p.price),
   }));
+  const recent: ProductData[] = recentRaw.map((p) => ({
+    ...p,
+    price: Number(p.price),
+  }));
 
+  // Total value
   const totalValue = allProducts.reduce(
-    (sum, product) => sum + product.price * product.quantity,
+    (sum, p) => sum + p.price * p.quantity,
     0
   );
 
+  // Stock counts
   const inStockCount = allProducts.filter((p) => p.quantity > 5).length;
   const lowStockCount = allProducts.filter(
     (p) => p.quantity <= 5 && p.quantity >= 1
   ).length;
   const outOfStockCount = allProducts.filter((p) => p.quantity === 0).length;
 
+  // Percentages
   const inStockPercentage = totalProducts
     ? Math.round((inStockCount / totalProducts) * 100)
     : 0;
@@ -60,6 +79,7 @@ export default async function DashboardPage() {
     ? Math.round((outOfStockCount / totalProducts) * 100)
     : 0;
 
+  // Weekly products data
   const now = new Date();
   const weeklyProductsData = Array.from({ length: 12 }, (_, i) => {
     const weekStart = new Date(now);
@@ -76,24 +96,12 @@ export default async function DashboardPage() {
     )}/${String(weekStart.getDate()).padStart(2, "0")}`;
 
     const weekProducts = allProducts.filter(
-      (product) =>
-        product.createdAt >= weekStart && product.createdAt <= weekEnd
+      (p) => p.createdAt >= weekStart && p.createdAt <= weekEnd
     );
-
     return { week: weekLabel, products: weekProducts.length };
   });
 
-  const recentRaw = await prisma.product.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    take: 5,
-  });
-
-  const recent: ProductData[] = recentRaw.map((p) => ({
-    ...p,
-    price: Number(p.price),
-  }));
-
+  // JSX return
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar currentPath="/dashboard" />
@@ -107,7 +115,7 @@ export default async function DashboardPage() {
               </h1>
               <p className="text-sm text-gray-500">
                 <span className="text-xl font-bold uppercase">
-                  {user.displayName}
+                  {user?.displayName}
                 </span>{" "}
                 Welcome back! Here is an overview of your inventory.
               </p>
@@ -162,7 +170,7 @@ export default async function DashboardPage() {
           {/* Weekly Chart */}
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <h2 className="mb-6">New products per week</h2>
-            <div className="h-48">
+            <div style={{ width: "100%", height: 200 }}>
               <ProductsChart data={weeklyProductsData} />
             </div>
           </div>
@@ -193,7 +201,6 @@ export default async function DashboardPage() {
                   "text-yellow-600",
                   "text-green-600",
                 ];
-
                 return (
                   <div
                     key={key}
