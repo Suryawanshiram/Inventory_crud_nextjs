@@ -4,19 +4,19 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { TrendingUp } from "lucide-react";
 
-interface ProductData {
+type ProductData = {
   price: number;
   quantity: number;
   createdAt: Date;
-  name?: string;
-  lowStockAt?: number | null;
-}
+  name: string;
+  lowStockAt: number | null;
+};
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
   const userId = user?.id;
 
-  const [totalProducts, lowStock, allProducts] = await Promise.all([
+  const [totalProducts, lowStock, rawProducts] = await Promise.all([
     prisma.product.count({ where: { userId } }),
     prisma.product.count({
       where: { userId, lowStockAt: { not: null }, quantity: { lte: 5 } },
@@ -30,12 +30,17 @@ export default async function DashboardPage() {
         name: true,
         lowStockAt: true,
       },
-    }) as Promise<ProductData[]>,
+    }),
   ]);
 
+  // Convert Decimal to number
+  const allProducts: ProductData[] = rawProducts.map((p) => ({
+    ...p,
+    price: Number(p.price),
+  }));
+
   const totalValue = allProducts.reduce(
-    (sum: number, product: ProductData) =>
-      sum + product.price * product.quantity,
+    (sum, product) => sum + product.price * product.quantity,
     0
   );
 
@@ -78,11 +83,16 @@ export default async function DashboardPage() {
     return { week: weekLabel, products: weekProducts.length };
   });
 
-  const recent = (await prisma.product.findMany({
+  const recentRaw = await prisma.product.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
     take: 5,
-  })) as ProductData[];
+  });
+
+  const recent: ProductData[] = recentRaw.map((p) => ({
+    ...p,
+    price: Number(p.price),
+  }));
 
   return (
     <div className="min-h-screen bg-gray-50">
