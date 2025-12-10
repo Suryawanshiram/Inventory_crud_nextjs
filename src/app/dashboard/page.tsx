@@ -15,7 +15,9 @@ type ProductData = {
 export default async function DashboardPage() {
   const user = await getCurrentUser();
   const userId = user?.id;
+  if (!userId) return null;
 
+  // Fetch all data in parallel
   const [totalProducts, lowStock, rawProducts, recentRaw] = await Promise.all([
     prisma.product.count({ where: { userId } }),
     prisma.product.count({
@@ -55,21 +57,19 @@ export default async function DashboardPage() {
     price: Number(p.price),
   }));
 
-  // Total value
+  // Compute total value
   const totalValue = allProducts.reduce(
-    (sum: number, product: ProductData) =>
-      sum + product.price * product.quantity,
+    (sum, p) => sum + p.price * p.quantity,
     0
   );
 
-  // Stock counts
+  // Stock counts and percentages
   const inStockCount = allProducts.filter((p) => p.quantity > 5).length;
   const lowStockCount = allProducts.filter(
     (p) => p.quantity <= 5 && p.quantity >= 1
   ).length;
   const outOfStockCount = allProducts.filter((p) => p.quantity === 0).length;
 
-  // Percentages
   const inStockPercentage = totalProducts
     ? Math.round((inStockCount / totalProducts) * 100)
     : 0;
@@ -80,7 +80,7 @@ export default async function DashboardPage() {
     ? Math.round((outOfStockCount / totalProducts) * 100)
     : 0;
 
-  // Weekly products data
+  // Weekly products chart data
   const now = new Date();
   const weeklyProductsData = Array.from({ length: 12 }, (_, i) => {
     const weekStart = new Date(now);
@@ -95,33 +95,26 @@ export default async function DashboardPage() {
       2,
       "0"
     )}/${String(weekStart.getDate()).padStart(2, "0")}`;
-
     const weekProducts = allProducts.filter(
       (p) => p.createdAt >= weekStart && p.createdAt <= weekEnd
     );
+
     return { week: weekLabel, products: weekProducts.length };
   });
 
-  // JSX return
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar currentPath="/dashboard" />
       <main className="ml-64 p-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900">
-                Dashboard
-              </h1>
-              <p className="text-sm text-gray-500">
-                <span className="text-xl font-bold uppercase">
-                  {user?.displayName}
-                </span>{" "}
-                Welcome back! Here is an overview of your inventory.
-              </p>
-            </div>
-          </div>
+          <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+          <p className="text-sm text-gray-500">
+            <span className="text-xl font-bold uppercase">
+              {user.displayName}
+            </span>{" "}
+            Welcome back! Here is an overview of your inventory.
+          </p>
         </div>
 
         {/* Key Metrics */}
@@ -169,11 +162,12 @@ export default async function DashboardPage() {
           </div>
 
           {/* Weekly Chart */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div
+            className="bg-white rounded-lg border border-gray-200 p-6"
+            style={{ minHeight: 200 }}
+          >
             <h2 className="mb-6">New products per week</h2>
-            <div style={{ width: "100%", height: 200 }}>
-              <ProductsChart data={weeklyProductsData} />
-            </div>
+            <ProductsChart data={weeklyProductsData} />
           </div>
         </div>
 
@@ -181,9 +175,11 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Stock Levels */}
           <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-6">
-              Stock Levels
-            </h2>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Stock Levels
+              </h2>
+            </div>
             <div className="space-y-3">
               {recent.map((product, key) => {
                 const stockLevel =
@@ -192,6 +188,7 @@ export default async function DashboardPage() {
                     : product.quantity <= (product.lowStockAt || 5)
                     ? 1
                     : 2;
+
                 const bgColors = [
                   "bg-red-600",
                   "bg-yellow-600",
@@ -228,9 +225,11 @@ export default async function DashboardPage() {
 
           {/* Efficiency */}
           <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-6">
-              Efficiency
-            </h2>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Efficiency
+              </h2>
+            </div>
             <div className="flex items-center justify-center">
               <div className="relative w-48 h-48">
                 <div className="absolute inset-0 rounded-full border-8 border-gray-200"></div>
@@ -273,6 +272,7 @@ export default async function DashboardPage() {
             </div>
           </div>
         </div>
+        {/* ...Add your Stock Levels and Efficiency JSX here as before... */}
       </main>
     </div>
   );
