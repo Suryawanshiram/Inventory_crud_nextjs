@@ -5,7 +5,7 @@ import Link from "next/link";
 
 export default async function AddProductPage() {
   const user = await getCurrentUser();
-  console.log(user);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar currentPath="/add-product" />
