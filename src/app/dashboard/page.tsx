@@ -4,103 +4,80 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { TrendingUp } from "lucide-react";
 
-type ProductData = {
-  price: number;
-  quantity: number;
-  createdAt: Date;
-  name: string;
-  lowStockAt: number | null;
-};
-
 export default async function DashboardPage() {
   const user = await getCurrentUser();
-  const userId = user?.id;
-  if (!userId) return null;
+  const userId = user.id;
 
-  // Fetch all data in parallel
-  const [totalProducts, lowStock, rawProducts, recentRaw] = await Promise.all([
+  const [totalProducts, lowStock, allProducts] = await Promise.all([
     prisma.product.count({ where: { userId } }),
     prisma.product.count({
-      where: { userId, lowStockAt: { not: null }, quantity: { lte: 5 } },
-    }),
-    prisma.product.findMany({
-      where: { userId },
-      select: {
-        price: true,
-        quantity: true,
-        createdAt: true,
-        name: true,
-        lowStockAt: true,
+      where: {
+        userId,
+        lowStockAt: { not: null },
+        quantity: { lte: 5 },
       },
     }),
     prisma.product.findMany({
       where: { userId },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      select: {
-        price: true,
-        quantity: true,
-        createdAt: true,
-        name: true,
-        lowStockAt: true,
-      },
+      select: { price: true, quantity: true, createdAt: true },
     }),
   ]);
 
-  // Convert Decimal to number
-  const allProducts: ProductData[] = rawProducts.map((p) => ({
-    ...p,
-    price: Number(p.price),
-  }));
-  const recent: ProductData[] = recentRaw.map((p) => ({
-    ...p,
-    price: Number(p.price),
-  }));
-
-  // Compute total value
   const totalValue = allProducts.reduce(
-    (sum, p) => sum + p.price * p.quantity,
+    (sum, product) => sum + Number(product.price) * Number(product.quantity),
     0
   );
 
-  // Stock counts and percentages
-  const inStockCount = allProducts.filter((p) => p.quantity > 5).length;
+  const inStockCount = allProducts.filter((p) => Number(p.quantity) > 5).length;
   const lowStockCount = allProducts.filter(
-    (p) => p.quantity <= 5 && p.quantity >= 1
+    (p) => Number(p.quantity) <= 5 && Number(p.quantity) >= 1
   ).length;
-  const outOfStockCount = allProducts.filter((p) => p.quantity === 0).length;
+  const outOfStockCount = allProducts.filter(
+    (p) => Number(p.quantity) === 0
+  ).length;
 
-  const inStockPercentage = totalProducts
-    ? Math.round((inStockCount / totalProducts) * 100)
-    : 0;
-  const lowStockPercentage = totalProducts
-    ? Math.round((lowStockCount / totalProducts) * 100)
-    : 0;
-  const outOfStockPercentage = totalProducts
-    ? Math.round((outOfStockCount / totalProducts) * 100)
-    : 0;
+  const inStockPercentage =
+    totalProducts > 0 ? Math.round((inStockCount / totalProducts) * 100) : 0;
+  const lowStockPercentage =
+    totalProducts > 0 ? Math.round((lowStockCount / totalProducts) * 100) : 0;
+  const outOfStockPercentage =
+    totalProducts > 0 ? Math.round((outOfStockCount / totalProducts) * 100) : 0;
 
-  // Weekly products chart data
   const now = new Date();
-  const weeklyProductsData = Array.from({ length: 12 }, (_, i) => {
+  const weeklyProductsData = [];
+
+  for (let i = 11; i >= 0; i--) {
     const weekStart = new Date(now);
-    weekStart.setDate(weekStart.getDate() - (11 - i) * 7);
+    weekStart.setDate(weekStart.getDate() - i * 7);
     weekStart.setHours(0, 0, 0, 0);
 
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
-    weekEnd.setHours(23, 59, 59, 999);
+    weekStart.setHours(23, 59, 59, 999);
 
     const weekLabel = `${String(weekStart.getMonth() + 1).padStart(
       2,
       "0"
-    )}/${String(weekStart.getDate()).padStart(2, "0")}`;
-    const weekProducts = allProducts.filter(
-      (p) => p.createdAt >= weekStart && p.createdAt <= weekEnd
-    );
+    )}/${String(weekStart.getDate() + 1).padStart(2, "0")}`;
 
-    return { week: weekLabel, products: weekProducts.length };
+    const weekProducts = allProducts.filter((product) => {
+      const productDate = new Date(product.createdAt);
+      return productDate >= weekStart && productDate <= weekEnd;
+    });
+
+    weeklyProductsData.push({
+      week: weekLabel,
+      products: weekProducts.length,
+    });
+  }
+
+  const recent = await prisma.product.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    take: 5,
   });
+
+  // console.log(totalValue);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -108,17 +85,20 @@ export default async function DashboardPage() {
       <main className="ml-64 p-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-500">
-            <span className="text-xl font-bold uppercase">
-              {user.displayName}
-            </span>{" "}
-            Welcome back! Here is an overview of your inventory.
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900">
+                Dashboard
+              </h1>
+              <p className="text-sm text-gray-500">
+                Welcome back! Here is an overview of your inventory.
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* Key Metrics */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          {/* Key Metrics */}
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-6">
               Key Metrics
@@ -136,18 +116,20 @@ export default async function DashboardPage() {
                   <TrendingUp className="w-3 h-3 text-green-600 ml-1" />
                 </div>
               </div>
+
               <div className="text-center">
                 <div className="text-3xl font-bold text-gray-900">
-                  ${totalValue.toFixed(0)}
+                  ${Number(totalValue).toFixed(0)}
                 </div>
                 <div className="text-sm text-gray-600">Total Value</div>
                 <div className="flex items-center justify-center mt-1">
                   <span className="text-xs text-green-600">
-                    +${totalValue.toFixed(0)}
+                    +${Number(totalValue).toFixed(0)}
                   </span>
                   <TrendingUp className="w-3 h-3 text-green-600 ml-1" />
                 </div>
               </div>
+
               <div className="text-center">
                 <div className="text-3xl font-bold text-gray-900">
                   {lowStock}
@@ -161,17 +143,17 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {/* Weekly Chart */}
-          <div
-            className="bg-white rounded-lg border border-gray-200 p-6"
-            style={{ minHeight: 200 }}
-          >
-            <h2 className="mb-6">New products per week</h2>
-            <ProductsChart data={weeklyProductsData} />
+          {/* Iventory over time */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2>New products per week</h2>
+            </div>
+            <div className="h-48">
+              <ProductsChart data={weeklyProductsData} />
+            </div>
           </div>
         </div>
 
-        {/* Stock & Efficiency */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Stock Levels */}
           <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -272,7 +254,6 @@ export default async function DashboardPage() {
             </div>
           </div>
         </div>
-        {/* ...Add your Stock Levels and Efficiency JSX here as before... */}
       </main>
     </div>
   );
