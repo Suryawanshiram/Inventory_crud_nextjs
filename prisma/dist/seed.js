@@ -45,19 +45,17 @@ function main() {
             switch (_a.label) {
                 case 0:
                     demoUserId = "9140c1b2-ddfd-4ff5-8a6a-becff6ac1a12";
-                    // Create sample products
                     return [4 /*yield*/, prisma.product.createMany({
                             data: Array.from({ length: 25 }).map(function (_, i) { return ({
                                 userId: demoUserId,
                                 name: "Product ".concat(i + 1),
-                                price: (Math.random() * 90 + 10).toFixed(2),
+                                price: Number((Math.random() * 90 + 10).toFixed(2)),
                                 quantity: Math.floor(Math.random() * 20),
                                 lowStockAt: 5,
                                 createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * (i * 5)),
                             }); }),
                         })];
                 case 1:
-                    // Create sample products
                     _a.sent();
                     console.log("Seed data created successfully!");
                     console.log("Created 25 products for user ID: ".concat(demoUserId));
