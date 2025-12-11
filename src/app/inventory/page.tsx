@@ -3,6 +3,7 @@ import Sidebar from "@/components/sidebar";
 import { deleteProduct } from "@/lib/actions/products";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { Product as PrismaProduct } from "@prisma/client";
 
 type Product = {
   id: string;
@@ -42,8 +43,8 @@ export default async function InventoryPage({
     }),
   ]);
 
-  // Convert Prisma Decimal to number for frontend
-  const items: Product[] = itemsRaw.map((p) => ({
+  // Map Prisma product to frontend Product type and convert Decimal
+  const items: Product[] = itemsRaw.map((p: PrismaProduct) => ({
     id: p.id,
     name: p.name,
     sku: p.sku,
@@ -58,6 +59,7 @@ export default async function InventoryPage({
     <div className="min-h-screen bg-gray-50">
       <Sidebar currentPath="/inventory" />
       <main className="ml-64 p-8">
+        {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
@@ -113,7 +115,7 @@ export default async function InventoryPage({
               </thead>
 
               <tbody className="bg-white divide-y divide-gray-200">
-                {items.map((product, key) => (
+                {items.map((product: Product, key: number) => (
                   <tr key={key} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm text-gray-500">
                       {product.name}
