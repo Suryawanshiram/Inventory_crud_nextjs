@@ -1,5 +1,5 @@
 import ProductsChart from "@/components/products-chart";
-import { Decimal } from "@prisma/client/runtime/library";
+import Decimal from "decimal.js";
 
 import Sidebar from "@/components/sidebar";
 import { getCurrentUser } from "@/lib/auth";
@@ -58,12 +58,12 @@ export default async function DashboardPage() {
   // Convert Decimal to number
   const allProducts: ProductData[] = rawProducts.map((p: RawProduct) => ({
     ...p,
-    price: Number(p.price),
+    price: p.price.toNumber(),
   }));
 
   const recent: ProductData[] = recentRaw.map((p: RawProduct) => ({
     ...p,
-    price: Number(p.price),
+    price: p.price.toNumber(),
   }));
 
   // Total value
