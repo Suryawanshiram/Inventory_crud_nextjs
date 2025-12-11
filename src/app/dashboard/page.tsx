@@ -1,4 +1,5 @@
 import ProductsChart from "@/components/products-chart";
+import { Prisma } from "@prisma/client";
 import Sidebar from "@/components/sidebar";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -12,7 +13,7 @@ type ProductData = {
 };
 
 type RawProduct = {
-  price: any; // Decimal from Prisma
+  price: Prisma.Decimal; // Decimal from Prisma
   quantity: number;
   createdAt: Date;
   name: string;
@@ -65,7 +66,7 @@ export default async function DashboardPage() {
   }));
 
   // Total value
-  const totalValue: number = allProducts.reduce(
+  const totalValue = allProducts.reduce(
     (sum: number, product: ProductData) =>
       sum + product.price * product.quantity,
     0
