@@ -1,5 +1,6 @@
 import ProductsChart from "@/components/products-chart";
-import { Prisma } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
+
 import Sidebar from "@/components/sidebar";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -13,7 +14,7 @@ type ProductData = {
 };
 
 type RawProduct = {
-  price: Prisma.Decimal; // Decimal from Prisma
+  price: Decimal;
   quantity: number;
   createdAt: Date;
   name: string;
