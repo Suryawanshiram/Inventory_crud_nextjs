@@ -4,12 +4,22 @@ import { deleteProduct } from "@/lib/actions/products";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+type Product = {
+  id: string;
+  name: string;
+  sku?: string | null;
+  price: number;
+  quantity: number;
+  lowStockAt?: number | null;
+};
+
 export default async function InventoryPage({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string; page?: string }>;
 }) {
   const user = await getCurrentUser();
+  if (!user) throw new Error("Not authenticated");
   const userId = user.id;
 
   const params = await searchParams;
@@ -22,7 +32,7 @@ export default async function InventoryPage({
     ...(q ? { name: { contains: q, mode: "insensitive" as const } } : {}),
   };
 
-  const [totalCount, items] = await Promise.all([
+  const [totalCount, itemsRaw] = await Promise.all([
     prisma.product.count({ where }),
     prisma.product.findMany({
       where,
@@ -31,6 +41,16 @@ export default async function InventoryPage({
       take: pageSize,
     }),
   ]);
+
+  // Convert Prisma Decimal to number for frontend
+  const items: Product[] = itemsRaw.map((p) => ({
+    id: p.id,
+    name: p.name,
+    sku: p.sku,
+    price: Number(p.price),
+    quantity: p.quantity,
+    lowStockAt: p.lowStockAt ?? null,
+  }));
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
@@ -98,19 +118,19 @@ export default async function InventoryPage({
                     <td className="px-6 py-4 text-sm text-gray-500">
                       {product.name}
                     </td>
-                    <td className="px-6 py-4  text-sm text-gray-500">
+                    <td className="px-6 py-4 text-sm text-gray-500">
                       {product.sku || "-"}
                     </td>
-                    <td className="px-6 py-4  text-sm text-gray-900">
-                      ${Number(product.price).toFixed(2)}
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      ${product.price.toFixed(2)}
                     </td>
-                    <td className="px-6 py-4  text-sm text-gray-900">
+                    <td className="px-6 py-4 text-sm text-gray-900">
                       {product.quantity}
                     </td>
-                    <td className="px-6 py-4  text-sm text-gray-500">
-                      {product.lowStockAt || "-"}
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {product.lowStockAt ?? "-"}
                     </td>
-                    <td className="px-6 py-4  text-sm text-gray-500">
+                    <td className="px-6 py-4 text-sm text-gray-500">
                       <form
                         action={async (formData: FormData) => {
                           "use server";
